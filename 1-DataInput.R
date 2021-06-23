@@ -1,5 +1,7 @@
 ### initial look at the data and tree of Epiponini
 library(phytools)
+library(corHMM)
+library(hisse)
 library(stringr)
 
 setwd("C:/Users/Roi Maor/Desktop/Projects/Wasps/workspace")
@@ -11,6 +13,7 @@ tree <- drop.tip(tree, dups)
 
 taxa <- read.table('taxa_block.txt') 
 dat <- read.csv('1.0 Correlates_SocEvo_trait_data.csv')
+#dat <- read.csv('2.0 Correlates_SocEvo_Dimorphism_Metric.csv')
 dat <- dat[order(dat$genus_species),]
 dat$genus <- str_to_title(dat$genus) # capitalise genus names
 
@@ -40,19 +43,20 @@ for (j in 1:length(tree$tip.label)) {
 # conform spelling to phylo
 dat$genus_species[which(dat$genus_species == "Asteloeca_ujhelyii")] <- "Asteloeca_ujhelyi"  
 
+## plotting data species (blue) on the tree
+label <- rep("black", Ntip(tree))
+names(label) <- tree$tip.label
+label[which(!tree$tip.label %in% dat$genus_species)] <- "red"   # no data
+plot(tree, type='fan', cex=0.7, tip.color = label[tree$tip.label])
+
+
 # remove tips w/o data
 ptree <- drop.tip(tree, setdiff(tree$tip.label, dat$genus_species))
 
 # taxa w phylogenetic and trait data
 dtaxa <- dat[which(dat$genus_species %in% tree$tip.label),]
-length(unique(dtaxa$binomial)) == 50 # species on tree w data - matching Phoebe's email from 26/05/2021
+length(unique(dtaxa$genus_species)) == 50 # species on tree w data - matching Phoebe's email from 26/05/2021
 
-
-# plotting data species (blue) on the tree
-label <- character(Ntip(tree))
-names(label) <- tree$tip.label
-label[which(tree$tip.label %in% dat$genus_species)] <- "blue"
-label[which(!tree$tip.label %in% dat$genus_species)] <- "red"
 
 # plotting data on the pruned tree
 label1 <- character(Ntip(ptree))
@@ -92,4 +96,33 @@ legend("topleft", legend = c("Morphologically similar","Isometric","Allometric",
        col = c("grey90","lightblue","blue", "grey40"), pch=15, bty = "n")
 dev.off()
 
+pdf(file="ColSizeVs.Differentiation.pdf")
+ggplot(dat) +
+    aes(x=caste_differentiation, y=log(colony_size_max)) +
+    geom_violin() +
+    geom_jitter(width = 0.05) +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6, option="D") +
+    theme(legend.position="none", plot.title = element_text(size=11)) +
+    xlab("")
+dev.off()
 
+### evolutionary models
+
+## from phytools: http://www.phytools.org/Cordoba2017/ex/4/PGLS.html
+bm <- corBrownian(1, ptree)
+
+library(nlme)
+model1 <- gls(colony_size_max ~ caste_differentiation, data=dat, correlation=bm)
+
+label <- label1
+label <- gsub("grey80","Similar",label)
+label <- gsub("skyblue","Isometric",label)
+label <- gsub("blue","Allometric",label)
+mkmod <- fitMk(ptree, label, model="ARD")
+plot(mkmod, title="Mk model fit to differentitation data")
+
+allo <- dat[which(dat$caste_differentiation == "Allometric"),]
+iso <- dat[which(dat$caste_differentiation == "Isometric"),]
+
+
+modpgls <- pgls(colony_size_max ~ caste_differentiation, data=dat, correlation=)
